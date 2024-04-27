@@ -6,8 +6,9 @@
 const char* vertexShaderSource = R"(
     #version 330 core
     layout (location = 0) in vec3 aPos;
+    uniform float aspectRatio;
     void main() {
-        gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+        gl_Position = vec4(aPos.x * aspectRatio, aPos.y, aPos.z, 1.0);
     }
 )";
 
@@ -32,14 +33,21 @@ const char* fragmentShaderSource = R"(
     }
 )";
 
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+    GLuint shaderProgram = *(GLuint*)glfwGetWindowUserPointer(window);
+    glUseProgram(shaderProgram);
+    float aspectRatio = width > height ? (float)width / height : (float)height / width;
+    GLint aspectRatioLocation = glGetUniformLocation(shaderProgram, "aspectRatio");
+    glUniform1f(aspectRatioLocation, aspectRatio);
+}
+
 int main() {
-    // Initialize GLFW
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
         return -1;
     }
 
-    // Create a windowed mode window and its OpenGL context
     GLFWwindow* window = glfwCreateWindow(800, 600, "OpenGL Example", NULL, NULL);
     if (!window) {
         std::cerr << "Failed to create GLFW window\n";
@@ -49,19 +57,18 @@ int main() {
 
     glfwMakeContextCurrent(window);
 
-    // Initialize GLEW
     if (glewInit() != GLEW_OK) {
         std::cerr << "Failed to initialize GLEW\n";
         return -1;
     }
 
-    // Compile and setup the shader
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
     glCompileShader(vertexShader);
 
     GLint success;
     GLchar infoLog[512];
+
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
@@ -71,6 +78,7 @@ int main() {
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
+
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
@@ -81,20 +89,21 @@ int main() {
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
 
-    // Check for linking errors
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
         std::cerr << "Shader program linking failed:\n" << infoLog << std::endl;
     }
 
+    glUseProgram(shaderProgram);
+    glfwSetWindowUserPointer(window, &shaderProgram);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
     GLfloat vertices[] = {
-        0.0f, 0.5f, 0.0f,  // top
-       -0.5f, -0.5f, 0.0f, // bottom left
-        0.5f, -0.5f, 0.0f  // bottom right
+        0.0f, 0.5f, 0.0f,
+       -0.5f, -0.5f, 0.0f,
+        0.5f, -0.5f, 0.0f
     };
 
     GLuint VBO, VAO;
@@ -107,19 +116,18 @@ int main() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    // Uniform locations
+    GLint aspectRatioLocation = glGetUniformLocation(shaderProgram, "aspectRatio");
     GLint timeLocation = glGetUniformLocation(shaderProgram, "time");
     GLint resolutionLocation = glGetUniformLocation(shaderProgram, "resolution");
     GLint mouseLocation = glGetUniformLocation(shaderProgram, "mouse");
 
-    // Main loop
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
-        glViewport(0, 0, width, height);
-        glUniform2f(resolutionLocation, static_cast<float>(width), static_cast<float>(height));
+        float aspectRatio = width > height ? (float)width / height : (float)height / width;
+        glUniform1f(aspectRatioLocation, aspectRatio);
 
         double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
@@ -128,7 +136,6 @@ int main() {
         glUniform1f(timeLocation, static_cast<float>(glfwGetTime()));
 
         glClear(GL_COLOR_BUFFER_BIT);
-        glUseProgram(shaderProgram);
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, 3);
         glfwSwapBuffers(window);
