@@ -33,6 +33,7 @@ const char* fragmentShaderSource = R"(
     }
 )";
 
+// Define the framebuffer size callback
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
     GLuint shaderProgram = *(GLuint*)glfwGetWindowUserPointer(window);
@@ -40,6 +41,63 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     float aspectRatio = width > height ? (float)width / height : (float)height / width;
     GLint aspectRatioLocation = glGetUniformLocation(shaderProgram, "aspectRatio");
     glUniform1f(aspectRatioLocation, aspectRatio);
+}
+
+GLuint compileShader(const char* shaderSource, GLenum type) {
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &shaderSource, NULL);
+    glCompileShader(shader);
+
+    GLint success;
+    GLchar infoLog[512];
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        std::cerr << "Shader compilation failed:\n" << infoLog << std::endl;
+        return 0;
+    }
+    return shader;
+}
+
+GLuint createShaderProgram() {
+    GLuint vertexShader = compileShader(vertexShaderSource, GL_VERTEX_SHADER);
+    GLuint fragmentShader = compileShader(fragmentShaderSource, GL_FRAGMENT_SHADER);
+
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    glUseProgram(shaderProgram);
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    GLint success;
+    GLchar infoLog[512];
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        std::cerr << "Shader program linking failed:\n" << infoLog << std::endl;
+        return 0;
+    }
+
+    return shaderProgram;
+}
+
+void setupVertexData(GLuint& VAO, GLuint& VBO) {
+    GLfloat vertices[] = {
+        0.0f, 0.5f, 0.0f,
+       -0.5f, -0.5f, 0.0f,
+        0.5f, -0.5f, 0.0f
+    };
+
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
 }
 
 int main() {
@@ -56,69 +114,20 @@ int main() {
     }
 
     glfwMakeContextCurrent(window);
-
     if (glewInit() != GLEW_OK) {
         std::cerr << "Failed to initialize GLEW\n";
         return -1;
     }
 
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-
-    GLint success;
-    GLchar infoLog[512];
-
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        std::cerr << "Vertex shader compilation failed:\n" << infoLog << std::endl;
-    }
-
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-        std::cerr << "Fragment shader compilation failed:\n" << infoLog << std::endl;
-    }
-
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        std::cerr << "Shader program linking failed:\n" << infoLog << std::endl;
-    }
-
-    glUseProgram(shaderProgram);
+    GLuint shaderProgram = createShaderProgram();
     glfwSetWindowUserPointer(window, &shaderProgram);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    GLfloat vertices[] = {
-        0.0f, 0.5f, 0.0f,
-       -0.5f, -0.5f, 0.0f,
-        0.5f, -0.5f, 0.0f
-    };
-
-    GLuint VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+    GLuint VAO, VBO;
+    setupVertexData(VAO, VBO);
 
     GLint aspectRatioLocation = glGetUniformLocation(shaderProgram, "aspectRatio");
     GLint timeLocation = glGetUniformLocation(shaderProgram, "time");
-    GLint resolutionLocation = glGetUniformLocation(shaderProgram, "resolution");
     GLint mouseLocation = glGetUniformLocation(shaderProgram, "mouse");
 
     while (!glfwWindowShouldClose(window)) {
@@ -132,7 +141,6 @@ int main() {
         double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
         glUniform2f(mouseLocation, static_cast<float>(mouseX), static_cast<float>(mouseY));
-
         glUniform1f(timeLocation, static_cast<float>(glfwGetTime()));
 
         glClear(GL_COLOR_BUFFER_BIT);
