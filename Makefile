@@ -1,17 +1,16 @@
-# Define compiler
+# cl compiler
 CXX=g++
 
 # Define any compile-time flags
 CXXFLAGS=-std=c++11 -Wall -Wextra -MMD -MP
 
-# Define any directories containing header files other than /usr/include
-INCLUDES=-I/usr/include
+INCLUDES=-I../glm -I/mingw64/include
 
-# Define library paths in addition to /usr/lib
-LFLAGS=-L/usr/lib
+LFLAGS=-L/mingw64/lib
 
 # Define any libraries to link into executable
-LIBS=-lglfw -lGLEW -lGL -lGLU
+# Since we are on Windows with MinGW, we typically don't need to explicitly link against GL and GLU
+LIBS=-lglfw3 -lglew32 -lopengl32
 
 # Define the C++ source files
 SRCS=HexWrld.cpp
@@ -28,13 +27,13 @@ all: $(MAIN)
 	@echo Simple compiler named $(MAIN) has been compiled
 
 $(MAIN): $(OBJS) 
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $(MAIN) $(OBJS) $(LFLAGS) $(LIBS)
+	$(CXX) $(CXXFLAGS) -o $(MAIN) $(OBJS) $(LFLAGS) $(LIBS)
 
 # Suffix replacement rule for building .o's from .cpp's
 .cpp.o:
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
-	$(RM) $(OBJS) $(OBJS:.o=.d) $(MAIN)
+	$(RM) *.o *.d $(MAIN)
 
 -include $(OBJS:.o=.d)
